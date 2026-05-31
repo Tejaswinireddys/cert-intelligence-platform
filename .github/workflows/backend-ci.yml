@@ -32,9 +32,10 @@ jobs:
       - run: pip install -e ".[dev]" -q
 
       # Invariant: scorer + dedup must stay at 100% line coverage.
+      # test_dedup_guard.py covers the DB-backed DedupGuard class (lines 69-96).
       - name: Coverage gate (scorer + dedup)
         run: |
-          pytest tests/test_scorer.py tests/test_dedup.py \
+          pytest tests/test_scorer.py tests/test_dedup.py tests/test_dedup_guard.py \
             --cov=cip.engine.scorer --cov=cip.engine.dedup \
             --cov-report=term-missing --cov-fail-under=100 -q
 
