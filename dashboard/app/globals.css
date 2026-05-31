@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: #0a1622;
+  color: #e6edf6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* App shell uses one primary scroll region (the main content). */
+.app-shell {
+  display: grid;
+  grid-template-columns: 256px 1fr;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Atmospheric background: deep navy with faint security grid + radial glow. */
+.bg-soc {
+  background-color: #0a1622;
+  background-image:
+    radial-gradient(900px 500px at 100% -10%, rgba(45, 212, 191, 0.08), transparent 60%),
+    radial-gradient(700px 500px at -10% 110%, rgba(34, 211, 238, 0.06), transparent 55%),
+    linear-gradient(rgba(45, 212, 191, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 191, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+}
+
+.glass-card {
+  background: linear-gradient(180deg, rgba(20, 36, 58, 0.85), rgba(13, 27, 42, 0.85));
+  border: 1px solid rgba(45, 212, 191, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.glass-card:hover {
+  border-color: rgba(45, 212, 191, 0.22);
+}
+
+.hairline {
+  border-color: rgba(45, 212, 191, 0.12);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.18);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.32);
+  background-clip: content-box;
+}
+
+.scroll-area {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Recharts tooltip override for dark theme */
+.recharts-default-tooltip {
+  background: #0d1b2a !important;
+  border: 1px solid rgba(45, 212, 191, 0.25) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.7) !important;
+}
+.recharts-tooltip-label,
+.recharts-tooltip-item {
+  color: #e6edf6 !important;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: #7e93ad !important;
+}

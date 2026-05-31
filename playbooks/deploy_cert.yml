@@ -1,0 +1,47 @@
+---
+# Signed Ansible playbook — Linux / app-server certificate deploy.
+# Invoked ONLY by the execution plane after a signed, scoped, time-boxed deploy
+# request. The CSR/private key is generated locally on the target host under a
+# least-privilege account; the key never leaves the host and never returns to
+# the control plane.
+#
+# Required extra-vars: serial=<new_serial> endpoint=<fqdn>
+# Run with: ansible-playbook deploy_cert.yml --extra-vars "serial=... endpoint=..." --limit <host>
+
+- name: Deploy renewed certificate (least-privilege, change-window gated)
+  hosts: "{{ endpoint | default('all') }}"
+  become: true
+  gather_facts: false
+  vars:
+    cert_dir: /etc/ssl/certs
+    key_dir: /etc/ssl/private
+  tasks:
+    - name: Assert a serial was provided
+      ansible.builtin.assert:
+        that:
+          - serial is defined
+          - serial | length > 0
+        fail_msg: "No certificate serial provided — refusing to deploy."
+
+    - name: Generate CSR locally (key stays on host)
+      ansible.builtin.command:
+        cmd: "openssl req -new -newkey rsa:2048 -nodes -keyout {{ key_dir }}/{{ endpoint }}.key -out /tmp/{{ endpoint }}.csr -subj '/CN={{ endpoint }}'"
+        creates: "{{ key_dir }}/{{ endpoint }}.key"
+      no_log: true  # never log key material
+
+    - name: Install signed certificate fetched by serial
+      ansible.builtin.copy:
+        src: "/tmp/{{ serial }}.pem"
+        dest: "{{ cert_dir }}/{{ endpoint }}.pem"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload service to pick up new certificate
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    - name: Record deploy marker (audit handled by control plane)
+      ansible.builtin.debug:
+        msg: "Deployed cert serial {{ serial }} to {{ endpoint }}"

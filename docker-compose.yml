@@ -1,0 +1,49 @@
+services:
+  # --- App (FastAPI backend) ------------------------------------------------
+  api:
+    build: .
+    command: uvicorn cip.app:app --host 0.0.0.0 --port 8000
+    environment:
+      CIP_MODE: ${CIP_MODE:-MOCK}
+      CIP_DATABASE_URL: ${CIP_DATABASE_URL:-sqlite:////data/cip.db}
+      CIP_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      - cip_data:/data
+    # In LIVE mode, depends_on: [postgres, redis, vault]
+
+  # --- Dashboard (Next.js) --------------------------------------------------
+  dashboard:
+    build: ./dashboard
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  # --- Optional LIVE-mode infrastructure (commented for MOCK) ---------------
+  # postgres:
+  #   image: postgres:16
+  #   environment:
+  #     POSTGRES_USER: cip
+  #     POSTGRES_PASSWORD: cip
+  #     POSTGRES_DB: cip
+  #   ports: ["5432:5432"]
+  #   volumes: [pg_data:/var/lib/postgresql/data]
+  #
+  # redis:
+  #   image: redis:7
+  #   ports: ["6379:6379"]
+  #
+  # vault:
+  #   image: hashicorp/vault:1.16
+  #   cap_add: [IPC_LOCK]
+  #   environment:
+  #     VAULT_DEV_ROOT_TOKEN_ID: dev-root
+  #   ports: ["8200:8200"]
+
+volumes:
+  cip_data:
+  # pg_data:
