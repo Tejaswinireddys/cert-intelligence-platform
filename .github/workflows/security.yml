@@ -1,0 +1,53 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Monday at 07:00 UTC regardless of commits.
+    - cron: "0 7 * * 1"
+
+jobs:
+  pip-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install pip-audit -q
+      - name: Audit Python dependencies
+        run: pip-audit --requirement <(pip install -e . -q && pip freeze) --skip-editable
+
+  npm-audit:
+    name: NPM dependency audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci --audit=false
+      - name: Audit NPM dependencies
+        run: npm audit --audit-level=high
+        continue-on-error: true  # report but don't block; triage separately
+
+  secrets-scan:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for secret scanning
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
