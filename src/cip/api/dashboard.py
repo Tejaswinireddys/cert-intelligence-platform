@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from sqlalchemy import func, select
 
 from cip.db import (
@@ -59,7 +59,6 @@ def summary() -> dict:
         actionable = [r for r in rows if r.tier != "OK"]
         with_owner = sum(1 for r in actionable if r.owner_group)
         coverage = round(100 * with_owner / max(len(actionable), 1), 1)
-        closed = [r for r in rows if r.status == "closed"]
         dlq_count = s.execute(select(func.count()).select_from(DlqRow)).scalar() or 0
 
         week_ago = _NOW().replace(tzinfo=None) - timedelta(days=7)

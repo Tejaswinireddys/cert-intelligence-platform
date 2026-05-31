@@ -6,8 +6,6 @@ message. P1 immediate page; P2 daily card; P3 weekly digest. Never key material.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Optional
-
 import httpx
 
 from cip.audit import get_logger
