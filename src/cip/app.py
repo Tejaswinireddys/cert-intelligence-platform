@@ -1,6 +1,7 @@
 """FastAPI application factory — dashboard backend + webhook receivers."""
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -8,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from cip import __version__
-from cip.api import dashboard, webhooks
+from cip.api import dashboard, webhooks, ws  # ws import registers the event hook
 from cip.audit import get_logger
 from cip.config import get_settings
 from cip.db import CertificateRow, create_all, session_scope
@@ -39,7 +40,14 @@ async def lifespan(app: FastAPI):
             start_scheduler()
         except Exception as e:  # noqa: BLE001
             log.warning("scheduler_skipped", error=str(e))
+    # Background task: drain the event-bus → WebSocket broadcast queue.
+    broadcaster_task = asyncio.create_task(ws.broadcaster())
     yield
+    broadcaster_task.cancel()
+    try:
+        await broadcaster_task
+    except asyncio.CancelledError:
+        pass
 
 
 def create_app() -> FastAPI:
@@ -58,6 +66,7 @@ def create_app() -> FastAPI:
 
     app.include_router(dashboard.router)
     app.include_router(webhooks.router)
+    app.include_router(ws.router)
     return app
 
 

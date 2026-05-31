@@ -69,6 +69,10 @@ def scan(windows: list[int] | None = None, *, now: datetime | None = None,
     When include_healthy is True, the full inventory is ingested (healthy >90d
     certs are tracked but never ticketed) so the dashboard reflects the whole
     fleet. Ticketing/notification only fire for expiring (non-OK) certs.
+
+    After the main loop, AUTO-routed dev/test certs that are new this renewal
+    window (DedupAction.CREATE) are automatically kicked through the renewal saga
+    — no human approval required for non-prod environments.
     """
     settings = get_settings()
     windows = windows or settings.scan_window_list
@@ -80,6 +84,8 @@ def scan(windows: list[int] | None = None, *, now: datetime | None = None,
     seen: set[str] = set()
     tier_counts = {"P1": 0, "P2": 0, "P3": 0, "OK": 0}
     new_events = 0
+    # Collect serials eligible for auto-renewal (AUTO, dev/test, newly-created this window).
+    auto_renew_queue: list[str] = []
 
     # Scan widest window once (covers all narrower ones) for the mock; LIVE may
     # iterate per-window for API efficiency.
@@ -153,7 +159,31 @@ def scan(windows: list[int] | None = None, *, now: datetime | None = None,
                 CertEvent(type=EventType.TICKET_CREATED, serial=cert.serial,
                           tier=cert.tier.value, idempotency_key=idem), str(e)
             )
+            continue
+
+        # Queue AUTO dev/test certs for immediate saga execution (no approval needed).
+        if (decision.action == DedupAction.CREATE and
+                cert.routing == Routing.AUTO and
+                cert.environment in ("dev", "test")):
+            auto_renew_queue.append(cert.serial)
+
+    # Auto-renewal pass: run saga for newly-discovered AUTO non-prod certs.
+    # This runs after the scan loop so DB writes are committed before saga reads them.
+    if auto_renew_queue:
+        from cip.execution import saga  # local import to avoid module-level circularity
+
+        log.info("auto_renew_start", count=len(auto_renew_queue))
+        for serial in auto_renew_queue:
+            try:
+                result = saga.run_saga(serial, now=now)
+                log.info("auto_renew_result", serial=serial, saga=result.get("saga"))
+            except Exception as e:  # noqa: BLE001
+                log.error("auto_renew_error", serial=serial, error=str(e))
+                bus.dead_letter(
+                    CertEvent(type=EventType.RENEWAL_REQUESTED, serial=serial,
+                              tier="", idempotency_key=f"{serial}:auto"), str(e)
+                )
 
     audit(actor="engine", action="scan_complete",
-          detail=f"scanned={len(seen)} tiers={tier_counts}")
+          detail=f"scanned={len(seen)} tiers={tier_counts} auto_renewed={len(auto_renew_queue)}")
     return {"scanned": len(seen), "new_events": new_events, "tier_counts": tier_counts}

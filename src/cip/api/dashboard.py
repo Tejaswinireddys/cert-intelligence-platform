@@ -245,6 +245,18 @@ def renew(serial: str) -> dict:
     return {**result, "events": ev}
 
 
+@router.post("/certificates/{serial}/break-glass")
+def break_glass(serial: str, body: dict | None = None) -> dict:
+    """Emergency: approve + run saga bypassing the active freeze window.
+
+    Body: { "by": "oncall-engineer", "reason": "P1 prod cert expiring in 2h" }
+    Requires the cert to be in prod/staging (dev/test never freeze). Every call
+    is written to the append-only audit log under actor 'break_glass'.
+    """
+    b = body or {}
+    return saga.run_break_glass(serial, by=b.get("by", "user"), reason=b.get("reason", ""))
+
+
 @router.post("/orphans/{serial}/assign")
 def assign_owner(serial: str, body: dict) -> dict:
     owner_group = body.get("owner_group", "")

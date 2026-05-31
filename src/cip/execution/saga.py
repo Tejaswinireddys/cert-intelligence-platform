@@ -74,8 +74,13 @@ def approve(serial: str, *, by: str = "user") -> dict:
             "next": "renewal_requested"}
 
 
-def run_saga(serial: str, *, now: datetime | None = None) -> dict:
-    """Execute renew -> deploy -> verify with compensation. Returns final state."""
+def run_saga(serial: str, *, now: datetime | None = None,
+             break_glass: bool = False, break_glass_reason: str = "") -> dict:
+    """Execute renew -> deploy -> verify with compensation. Returns final state.
+
+    break_glass=True bypasses the freeze-window check for production P1 emergencies.
+    Every break-glass use is written to the append-only audit log.
+    """
     now = now or datetime.now(timezone.utc)
     cert = _load(serial)
     bus = get_bus()
@@ -87,9 +92,17 @@ def run_saga(serial: str, *, now: datetime | None = None) -> dict:
     if is_prod and cert.status != "approved":
         return {"serial": serial, "saga": "blocked",
                 "reason": "production requires Jira approval first", "events": events}
-    if is_prod and _is_frozen(now):
+    if is_prod and _is_frozen(now) and not break_glass:
         return {"serial": serial, "saga": "blocked",
                 "reason": "change freeze window active (break-glass required)", "events": events}
+    if break_glass and is_prod and _is_frozen(now):
+        reason_text = break_glass_reason or "emergency override"
+        audit(actor="break_glass", action="freeze_bypassed", serial=serial,
+              idempotency_key=idem, detail=f"break-glass: {reason_text}")
+        bus.emit(CertEvent(type=EventType.BREAK_GLASS, serial=serial, tier=cert.tier.value,
+                           idempotency_key=idem, actor="break_glass",
+                           detail=f"freeze window bypassed: {reason_text}"))
+        events.append("break_glass")
 
     # 1. RENEW (deterministic, via renewal agent -> engine.renew).
     renewal = renewal_agent.request_for(cert)
@@ -163,3 +176,15 @@ def run_saga(serial: str, *, now: datetime | None = None) -> dict:
           detail="renew+deploy+verify complete")
     events += ["verified", "closed"]
     return {"serial": serial, "saga": "verified", "events": events}
+
+
+def run_break_glass(serial: str, *, by: str = "user", reason: str = "") -> dict:
+    """Emergency override: approve (if not already) + run saga bypassing freeze window.
+
+    Reserved for P1 production certs during active freeze windows. Every invocation
+    is written to the append-only audit log with actor 'break_glass'.
+    """
+    cert = _load(serial)
+    if cert.status != "approved":
+        approve(serial, by=by)
+    return run_saga(serial, break_glass=True, break_glass_reason=reason or f"break-glass by {by}")

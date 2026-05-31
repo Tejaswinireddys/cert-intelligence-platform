@@ -23,6 +23,14 @@ log = get_logger("bus")
 
 MAX_ATTEMPTS = 5
 
+# Registered hooks receive every emitted event as a plain dict (thread-safe callables).
+_event_hooks: list[Callable[[dict], None]] = []
+
+
+def register_event_hook(hook: Callable[[dict], None]) -> None:
+    """Register a callback invoked synchronously on every EventBus.emit call."""
+    _event_hooks.append(hook)
+
 
 class TransientError(Exception):
     """Retryable error (e.g. API 429 / 5xx)."""
@@ -52,6 +60,22 @@ class EventBus:
                 )
             )
         log.info("emit", type=str(event.type), serial=event.serial, tier=tier)
+        payload = {
+            "type": "event",
+            "payload": {
+                "serial": event.serial,
+                "event_type": event.type.value if hasattr(event.type, "value") else str(event.type),
+                "tier": event.tier,
+                "actor": event.actor,
+                "detail": event.detail,
+                "ts": event.ts.isoformat(),
+            },
+        }
+        for hook in _event_hooks:
+            try:
+                hook(payload)
+            except Exception:  # noqa: BLE001
+                pass
 
     def process(self, event: CertEvent, handler: Callable[[CertEvent], None]) -> bool:
         """Run a handler with retry+backoff. On final failure -> DLQ. Returns

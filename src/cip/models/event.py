@@ -20,6 +20,7 @@ class EventType(str, Enum):
     TICKET_UPDATED = "ticket_updated"
     NOTIFIED = "notified"
     APPROVED = "approved"
+    BREAK_GLASS = "break_glass"
     RENEWAL_REQUESTED = "renewal_requested"
     RENEWED = "renewed"
     DEPLOYED = "deployed"
